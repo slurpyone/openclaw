@@ -22,7 +22,7 @@ export const DELIVERY_FAILURE_GUARD_CONFIG = {
  * A job is marked for auto-disable when:
  * 1. It has a delivery configuration (delivery.mode !== "none")
  * 2. The last delivery status was "not-delivered"
- * 3. consecutiveErrors >= configured threshold
+ * 3. consecutiveDeliveryFailures >= configured threshold
  * 4. Job is currently enabled
  *
  * Returns true if the job meets all criteria and should be disabled.
@@ -51,9 +51,11 @@ export function shouldAutoDisableOnDeliveryFailure(job: CronJob): boolean {
     return false;
   }
 
-  // Check if consecutive errors meet threshold
-  const consecutiveErrors = job.state.consecutiveErrors ?? 0;
-  return consecutiveErrors >= consecutiveFailureThreshold;
+  // Check if consecutive delivery failures meet threshold.
+  // Note: This tracks delivery failures independently from execution errors (consecutiveErrors).
+  // A job can run successfully but fail to deliver, so we count delivery failures separately.
+  const consecutiveDeliveryFailures = job.state.consecutiveDeliveryFailures ?? 0;
+  return consecutiveDeliveryFailures >= consecutiveFailureThreshold;
 }
 
 /**
@@ -75,11 +77,19 @@ export function buildAutoDisableNotification(job: CronJob): string {
 }
 
 /**
- * Resets delivery failure tracking on successful execution.
+ * Resets delivery failure tracking on successful delivery.
  */
 export function resetDeliveryFailureState(job: CronJob): void {
-  // consecutiveErrors will be reset elsewhere in the job execution flow
-  // This is a helper for explicitly resetting delivery-related state
+  // Clear delivery-related failure state when delivery succeeds
+  job.state.consecutiveDeliveryFailures = 0;
   job.state.lastDeliveryError = undefined;
-  job.state.lastDeliveryStatus = "unknown";
+  job.state.lastDeliveryStatus = "delivered";
+}
+
+/**
+ * Increments the consecutive delivery failure counter.
+ */
+export function incrementDeliveryFailureCounter(job: CronJob): void {
+  job.state.consecutiveDeliveryFailures = (job.state.consecutiveDeliveryFailures ?? 0) + 1;
+  job.state.lastDeliveryStatus = "not-delivered";
 }

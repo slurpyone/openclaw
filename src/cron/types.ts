@@ -130,6 +130,8 @@ export type CronJobState = {
   lastDeliveryError?: string;
   /** Whether the last run's output was delivered to the target channel. */
   lastDelivered?: boolean;
+  /** Number of consecutive delivery failures (independent from execution errors). */
+  consecutiveDeliveryFailures?: number;
 };
 
 export type CronJob = CronJobBase<

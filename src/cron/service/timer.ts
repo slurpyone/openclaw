@@ -2,7 +2,13 @@ import { resolveFailoverReasonFromError } from "../../agents/failover-error.js";
 import type { CronConfig, CronRetryOn } from "../../config/types.cron.js";
 import type { HeartbeatRunResult } from "../../infra/heartbeat-wake.js";
 import { DEFAULT_AGENT_ID } from "../../routing/session-key.js";
-import { shouldAutoDisableOnDeliveryFailure } from "../delivery-failure-guard.js";
+import {
+  shouldAutoDisableOnDeliveryFailure,
+  incrementDeliveryFailureCounter,
+  resetDeliveryFailureState,
+  buildAutoDisableNotification,
+  DELIVERY_FAILURE_GUARD_CONFIG,
+} from "../delivery-failure-guard.js";
 import { resolveCronDeliveryPlan } from "../delivery.js";
 import { sweepCronRunSessions } from "../session-reaper.js";
 import type {
@@ -335,17 +341,24 @@ export function applyJobResult(
     deliveryStatus === "not-delivered" && result.error ? result.error : undefined;
   job.updatedAtMs = result.endedAt;
 
+  // Track delivery failures independently from execution errors.
+  if (deliveryStatus === "not-delivered") {
+    incrementDeliveryFailureCounter(job);
+  } else if (deliveryStatus === "delivered") {
+    resetDeliveryFailureState(job);
+  }
+
   // Check if job should be auto-disabled due to delivery failures.
-  // This is checked before the execution error tracking so delivery failures
-  // are tracked independently.
+  // This is checked after delivery tracking so we have fresh counter values.
   if (shouldAutoDisableOnDeliveryFailure(job)) {
     job.enabled = false;
     job.state.nextRunAtMs = undefined;
+    const notificationMessage = buildAutoDisableNotification(job);
     state.deps.log.warn(
       {
         jobId: job.id,
         jobName: job.name,
-        consecutiveErrors: job.state.consecutiveErrors,
+        consecutiveDeliveryFailures: job.state.consecutiveDeliveryFailures,
         lastDeliveryError: job.state.lastDeliveryError,
       },
       "cron: auto-disabling job after repeated delivery failures",
@@ -356,6 +369,14 @@ export function applyJobResult(
       action: "auto-disabled-delivery-failure",
       nextRunAtMs: undefined,
     });
+    // Send notification if configured
+    if (DELIVERY_FAILURE_GUARD_CONFIG.notifyOnDisable) {
+      // Emit notification event for handlers to process
+      state.deps.log.info(
+        { jobId: job.id, message: notificationMessage },
+        "cron: auto-disable notification",
+      );
+    }
   }
 
   // Track consecutive errors for backoff / auto-disable.

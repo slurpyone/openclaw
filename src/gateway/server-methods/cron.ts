@@ -177,8 +177,11 @@ export const cronHandlers: GatewayRequestHandlers = {
       // Get the existing job to check merged delivery config
       const existingJob = context.cron.getJob(jobId);
       if (existingJob) {
-        // Create a temporary merged job to validate
-        const mergedDelivery = patch.delivery ?? existingJob.delivery;
+        // Deep merge the patch fields into the existing delivery config.
+        // This allows partial updates like { delivery: { mode: "announce" } } to keep existing channel/to.
+        const mergedDelivery = existingJob.delivery
+          ? { ...existingJob.delivery, ...patch.delivery }
+          : patch.delivery;
         const mergedJob = { ...existingJob, delivery: mergedDelivery };
         const deliveryValidation = validateCronDelivery(mergedJob);
         if (deliveryValidation) {

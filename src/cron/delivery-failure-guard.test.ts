@@ -75,12 +75,12 @@ describe("shouldAutoDisableOnDeliveryFailure", () => {
     expect(result).toBe(false);
   });
 
-  it("returns false when consecutive errors below threshold", () => {
+  it("returns false when consecutive delivery failures below threshold", () => {
     const result = shouldAutoDisableOnDeliveryFailure(
       makeJob({
         state: {
           lastDeliveryStatus: "not-delivered",
-          consecutiveErrors: 2, // threshold is 3
+          consecutiveDeliveryFailures: 2, // threshold is 3
         },
       }),
     );
@@ -94,31 +94,31 @@ describe("shouldAutoDisableOnDeliveryFailure", () => {
         delivery: { mode: "announce", channel: "telegram", to: "123" },
         state: {
           lastDeliveryStatus: "not-delivered",
-          consecutiveErrors: 3,
+          consecutiveDeliveryFailures: 3,
         },
       }),
     );
     expect(result).toBe(true);
   });
 
-  it("returns true when consecutive errors exceed threshold", () => {
+  it("returns true when consecutive delivery failures exceed threshold", () => {
     const result = shouldAutoDisableOnDeliveryFailure(
       makeJob({
         state: {
           lastDeliveryStatus: "not-delivered",
-          consecutiveErrors: 5,
+          consecutiveDeliveryFailures: 5,
         },
       }),
     );
     expect(result).toBe(true);
   });
 
-  it("treats missing consecutiveErrors as 0", () => {
+  it("treats missing consecutiveDeliveryFailures as 0", () => {
     const result = shouldAutoDisableOnDeliveryFailure(
       makeJob({
         state: {
           lastDeliveryStatus: "not-delivered",
-          consecutiveErrors: undefined,
+          consecutiveDeliveryFailures: undefined,
         },
       }),
     );
@@ -133,7 +133,7 @@ describe("buildAutoDisableNotification", () => {
         name: "critical-alert",
         id: "job-xyz",
         state: {
-          consecutiveErrors: 3,
+          consecutiveDeliveryFailures: 3,
           lastDeliveryError: "Discord rate limit exceeded",
         },
       }),
@@ -149,7 +149,7 @@ describe("buildAutoDisableNotification", () => {
     const notification = buildAutoDisableNotification(
       makeJob({
         state: {
-          consecutiveErrors: 3,
+          consecutiveDeliveryFailures: 3,
         },
       }),
     );
@@ -161,7 +161,7 @@ describe("buildAutoDisableNotification", () => {
     const notification = buildAutoDisableNotification(
       makeJob({
         state: {
-          consecutiveErrors: 3,
+          consecutiveDeliveryFailures: 3,
           lastError: "Fallback error message",
           lastDeliveryError: undefined,
         },
